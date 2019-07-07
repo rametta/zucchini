@@ -25,6 +25,7 @@ type alias Food =
     , title : String
     , bought : Bool
     , active : Bool
+    , changed : Bool
     }
 
 
@@ -58,6 +59,7 @@ type Msg
     | ReceiveFoods (Result Http.Error (List FSDocument))
     | ReceiveFood (Result Http.Error FSDocument)
     | ReceiveFoodUpdate (Result Http.Error FSDocument)
+    | ReceiveFoodDelete (Result Http.Error ())
     | RequestNewFood
     | RequestPatchFood Food
 
@@ -99,7 +101,7 @@ postFood : Cmd Msg
 postFood =
     Http.post
         { url = firestoreUrl "documents/foods"
-        , body = Http.jsonBody (encodeFood (Food "" "" False False))
+        , body = Http.jsonBody (encodeFood (Food "" "" False False False))
         , expect = Http.expectJson ReceiveFood documentDecoder
         }
 
@@ -114,6 +116,19 @@ patchFood food =
         , url = base ++ food.id ++ key
         , body = Http.jsonBody (encodeFood food)
         , expect = Http.expectJson ReceiveFoodUpdate documentDecoder
+        }
+
+
+deleteFood : Food -> Cmd Msg
+deleteFood food =
+    Http.request
+        { method = "Delete"
+        , headers = []
+        , timeout = Nothing
+        , tracker = Nothing
+        , url = base ++ food.id ++ key
+        , body = Http.jsonBody (encodeFood food)
+        , expect = Http.expectWhatever ReceiveFoodDelete
         }
 
 
@@ -154,6 +169,7 @@ fsDocumentToFood doc =
     , title = doc.fields.title
     , bought = doc.fields.bought
     , active = False
+    , changed = False
     }
 
 
@@ -167,9 +183,18 @@ subscriptions model =
     Sub.none
 
 
-createFood : Food
-createFood =
-    Food "" "" False False
+find : Food -> List Food -> Maybe Food
+find food foods =
+    let
+        filtered =
+            List.filter (\f -> f.id == food.id) foods
+    in
+    case List.isEmpty filtered of
+        True ->
+            Nothing
+
+        False ->
+            List.head filtered
 
 
 init : () -> ( Model, Cmd Msg )
@@ -194,7 +219,7 @@ update msg model =
                         (List.map
                             (\fd ->
                                 if fd.id == foodId then
-                                    { fd | title = text }
+                                    { fd | title = text, changed = True }
 
                                 else
                                     fd
@@ -270,10 +295,37 @@ update msg model =
                 Err _ ->
                     ( { model | error = Just "Could not create new food..." }, Cmd.none )
 
+        ReceiveFoodDelete result ->
+            case result of
+                Ok _ ->
+                    ( model, getFoods )
+
+                Err _ ->
+                    ( model, Cmd.none )
+
         ReceiveFoodUpdate result ->
             case result of
                 Ok foodDoc ->
-                    ( model, Cmd.none )
+                    let
+                        newFood =
+                            fsDocumentToFood foodDoc
+                    in
+                    ( { model
+                        | groceries =
+                            Maybe.map
+                                (List.map
+                                    (\fd ->
+                                        if fd.id == newFood.id then
+                                            newFood
+
+                                        else
+                                            fd
+                                    )
+                                )
+                                model.groceries
+                      }
+                    , Cmd.none
+                    )
 
                 Err _ ->
                     ( { model | error = Just "Could not update existing food..." }, Cmd.none )
@@ -281,9 +333,12 @@ update msg model =
         RequestNewFood ->
             ( model, postFood )
 
-        -- TODO: only patch food if it has changed
         RequestPatchFood food ->
-            ( model, patchFood food )
+            if food.changed then
+                ( model, patchFood food )
+
+            else
+                ( model, Cmd.none )
 
 
 navbar : Model -> Html Msg
