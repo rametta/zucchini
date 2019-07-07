@@ -7,7 +7,7 @@ import Html.Styled exposing (..)
 import Html.Styled.Attributes exposing (..)
 import Html.Styled.Events exposing (onBlur, onClick, onFocus, onInput)
 import Http
-import Json.Decode exposing (Decoder, bool, field, list, map2, string)
+import Json.Decode exposing (Decoder, bool, field, int, list, map2, map3, string)
 import Json.Encode as Encode
 
 
@@ -26,6 +26,7 @@ type alias Food =
     , bought : Bool
     , active : Bool
     , changed : Bool
+    , order : Int
     }
 
 
@@ -48,6 +49,7 @@ type alias FSDocument =
 type alias FSDocumentFields =
     { title : String
     , bought : Bool
+    , order : String
     }
 
 
@@ -97,11 +99,11 @@ getFoods =
         }
 
 
-postFood : Cmd Msg
-postFood =
+postFood : Int -> Cmd Msg
+postFood order =
     Http.post
         { url = firestoreUrl "documents/foods"
-        , body = Http.jsonBody (encodeFood (Food "" "" False False False))
+        , body = Http.jsonBody (encodeFood (Food "" "" False False False order))
         , expect = Http.expectJson ReceiveFood documentDecoder
         }
 
@@ -139,6 +141,7 @@ encodeFood food =
           , Encode.object
                 [ ( "title", Encode.object [ ( "stringValue", Encode.string food.title ) ] )
                 , ( "bought", Encode.object [ ( "booleanValue", Encode.bool food.bought ) ] )
+                , ( "order", Encode.object [ ( "integerValue", Encode.int food.order ) ] )
                 ]
           )
         ]
@@ -158,9 +161,10 @@ documentDecoder =
 
 fieldsDecoder : Decoder FSDocumentFields
 fieldsDecoder =
-    map2 FSDocumentFields
+    map3 FSDocumentFields
         (field "title" (field "stringValue" string))
         (field "bought" (field "booleanValue" bool))
+        (field "order" (field "integerValue" string))
 
 
 fsDocumentToFood : FSDocument -> Food
@@ -170,6 +174,7 @@ fsDocumentToFood doc =
     , bought = doc.fields.bought
     , active = False
     , changed = False
+    , order = Maybe.withDefault 0 (String.toInt doc.fields.order)
     }
 
 
@@ -195,6 +200,25 @@ find food foods =
 
         False ->
             List.head filtered
+
+
+extractTextFromError : Http.Error -> String
+extractTextFromError err =
+    case err of
+        Http.BadUrl s ->
+            s
+
+        Http.Timeout ->
+            "Timeout"
+
+        Http.NetworkError ->
+            "Network Error"
+
+        Http.BadStatus code ->
+            "Status: " ++ String.fromInt code
+
+        Http.BadBody s ->
+            s
 
 
 init : () -> ( Model, Cmd Msg )
@@ -275,8 +299,8 @@ update msg model =
                 Ok groceries ->
                     ( { model | groceries = Just (fsDocumentsToFoods groceries) }, Cmd.none )
 
-                Err errText ->
-                    ( { model | error = Just "Could not get saved food..." }, Cmd.none )
+                Err err ->
+                    ( { model | error = Just (extractTextFromError err) }, Cmd.none )
 
         ReceiveFood result ->
             case result of
@@ -292,8 +316,8 @@ update msg model =
                         Nothing ->
                             ( { model | groceries = Just [ food ] }, Cmd.none )
 
-                Err _ ->
-                    ( { model | error = Just "Could not create new food..." }, Cmd.none )
+                Err err ->
+                    ( { model | error = Just (extractTextFromError err) }, Cmd.none )
 
         ReceiveFoodDelete result ->
             case result of
@@ -327,11 +351,20 @@ update msg model =
                     , Cmd.none
                     )
 
-                Err _ ->
-                    ( { model | error = Just "Could not update existing food..." }, Cmd.none )
+                Err err ->
+                    ( { model | error = Just (extractTextFromError err) }, Cmd.none )
 
         RequestNewFood ->
-            ( model, postFood )
+            let
+                count =
+                    case model.groceries of
+                        Just items ->
+                            List.length items
+
+                        Nothing ->
+                            0
+            in
+            ( model, postFood count )
 
         RequestPatchFood food ->
             if food.changed then
@@ -466,7 +499,9 @@ view model =
                     [ div [ class "container" ]
                         (case model.groceries of
                             Just groceries ->
-                                List.map foodElem groceries
+                                groceries
+                                    |> List.sortBy .order
+                                    |> List.map foodElem
 
                             Nothing ->
                                 [ notify "There are no items in your basket yet. Try adding some by tapping the \"Add\" button in the bottom right" False
