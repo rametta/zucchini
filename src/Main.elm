@@ -5,7 +5,7 @@ import Css exposing (..)
 import Css.Transitions exposing (easeInOut, transition)
 import Html.Styled exposing (..)
 import Html.Styled.Attributes exposing (..)
-import Html.Styled.Events exposing (onClick, onFocus, onInput)
+import Html.Styled.Events exposing (onBlur, onClick, onFocus, onInput)
 import Http
 import Json.Decode exposing (Decoder, bool, field, list, map2, string)
 import Json.Encode as Encode
@@ -51,13 +51,15 @@ type alias FSDocumentFields =
 
 
 type Msg
-    = --CreateFood
-      ClearFoods
-    | ToggleFoodStatus String
+    = ClearFoods
+    | ToggleFoodStatus Food
     | FocusFood String
     | SetFoodText String String
     | ReceiveFoods (Result Http.Error (List FSDocument))
+    | ReceiveFood (Result Http.Error FSDocument)
+    | ReceiveFoodUpdate (Result Http.Error FSDocument)
     | RequestNewFood
+    | RequestPatchFood Food
 
 
 main : Program () Model Msg
@@ -70,9 +72,19 @@ main =
         }
 
 
+base : String
+base =
+    "https://firestore.googleapis.com/v1/"
+
+
+key : String
+key =
+    "?key=AIzaSyDbgLlOX3xa7dexgm0uEe_tqyWBsGf0eDc"
+
+
 firestoreUrl : String -> String
 firestoreUrl path =
-    "https://firestore.googleapis.com/v1/projects/zucchini-246013/databases/(default)/" ++ path ++ "?key=AIzaSyDbgLlOX3xa7dexgm0uEe_tqyWBsGf0eDc"
+    base ++ "projects/zucchini-246013/databases/(default)/" ++ path ++ key
 
 
 getFoods : Cmd Msg
@@ -88,7 +100,20 @@ postFood =
     Http.post
         { url = firestoreUrl "documents/foods"
         , body = Http.jsonBody (encodeFood (Food "" "" False False))
-        , expect = Http.expectJson ReceiveFoods documentsDecoder
+        , expect = Http.expectJson ReceiveFood documentDecoder
+        }
+
+
+patchFood : Food -> Cmd Msg
+patchFood food =
+    Http.request
+        { method = "Patch"
+        , headers = []
+        , timeout = Nothing
+        , tracker = Nothing
+        , url = base ++ food.id ++ key
+        , body = Http.jsonBody (encodeFood food)
+        , expect = Http.expectJson ReceiveFoodUpdate documentDecoder
         }
 
 
@@ -159,12 +184,6 @@ init _ =
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     case msg of
-        -- CreateFood ->
-        --     case model.groceries of
-        --         Just items ->
-        --             ( { model | groceries = Just (createFood :: items) }, Cmd.none )
-        --         Nothing ->
-        --             ( { model | groceries = Just [ createFood ] }, Cmd.none )
         ClearFoods ->
             ( { groceries = Nothing, error = Nothing }, Cmd.none )
 
@@ -204,14 +223,18 @@ update msg model =
             , Cmd.none
             )
 
-        ToggleFoodStatus foodId ->
+        ToggleFoodStatus food ->
+            let
+                newFood =
+                    { food | bought = not food.bought }
+            in
             ( { model
                 | groceries =
                     Maybe.map
                         (List.map
                             (\fd ->
-                                if fd.id == foodId then
-                                    { fd | bought = not fd.bought }
+                                if fd.id == food.id then
+                                    newFood
 
                                 else
                                     fd
@@ -219,7 +242,7 @@ update msg model =
                         )
                         model.groceries
               }
-            , Cmd.none
+            , patchFood newFood
             )
 
         ReceiveFoods result ->
@@ -230,8 +253,37 @@ update msg model =
                 Err errText ->
                     ( { model | error = Just "Could not get saved food..." }, Cmd.none )
 
+        ReceiveFood result ->
+            case result of
+                Ok foodDoc ->
+                    let
+                        food =
+                            fsDocumentToFood foodDoc
+                    in
+                    case model.groceries of
+                        Just items ->
+                            ( { model | groceries = Just (food :: items) }, Cmd.none )
+
+                        Nothing ->
+                            ( { model | groceries = Just [ food ] }, Cmd.none )
+
+                Err _ ->
+                    ( { model | error = Just "Could not create new food..." }, Cmd.none )
+
+        ReceiveFoodUpdate result ->
+            case result of
+                Ok foodDoc ->
+                    ( model, Cmd.none )
+
+                Err _ ->
+                    ( { model | error = Just "Could not update existing food..." }, Cmd.none )
+
         RequestNewFood ->
             ( model, postFood )
+
+        -- TODO: only patch food if it has changed
+        RequestPatchFood food ->
+            ( model, patchFood food )
 
 
 navbar : Model -> Html Msg
@@ -287,6 +339,7 @@ foodElem food =
             , value food.title
             , onFocus (FocusFood food.id)
             , onInput (SetFoodText food.id)
+            , onBlur (RequestPatchFood food)
             , Html.Styled.Attributes.disabled food.bought
             , placeholder "Food..."
             , id food.id
@@ -302,7 +355,7 @@ foodElem food =
             []
         , button
             [ class "button is-small"
-            , onClick (ToggleFoodStatus food.id)
+            , onClick (ToggleFoodStatus food)
             ]
             [ text
                 (case food.bought of
