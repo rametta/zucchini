@@ -30,11 +30,17 @@ type Msg
 
 main : Program () Model Msg
 main =
-    Browser.sandbox
+    Browser.element
         { init = init
         , view = view >> toUnstyled
         , update = update
+        , subscriptions = subscriptions
         }
+
+
+subscriptions : Model -> Sub Msg
+subscriptions model =
+    Sub.none
 
 
 createFood : Food
@@ -42,35 +48,37 @@ createFood =
     Food "" "" False False
 
 
-init : Model
-init =
-    { groceries =
-        Just
-            [ Food "a" "Cheese" False False
-            , Food "b" "Bread" False True
-            , Food "c" "coffee" True False
-            , Food "d" "white wine" True False
-            , Food "e" "jam" False False
-            ]
-    }
+init : () -> ( Model, Cmd Msg )
+init _ =
+    ( { groceries =
+            Just
+                [ Food "a" "Cheese" False False
+                , Food "b" "Bread" False True
+                , Food "c" "coffee" True False
+                , Food "d" "white wine" True False
+                , Food "e" "jam" False False
+                ]
+      }
+    , Cmd.none
+    )
 
 
-update : Msg -> Model -> Model
+update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     case msg of
         CreateFood ->
             case model.groceries of
                 Just items ->
-                    { model | groceries = Just (createFood :: items) }
+                    ( { model | groceries = Just (createFood :: items) }, Cmd.none )
 
                 Nothing ->
-                    { model | groceries = Just [ createFood ] }
+                    ( { model | groceries = Just [ createFood ] }, Cmd.none )
 
         ClearFoods ->
-            { groceries = Nothing }
+            ( { groceries = Nothing }, Cmd.none )
 
         SetFoodText foodId text ->
-            { model
+            ( { model
                 | groceries =
                     Maybe.map
                         (List.map
@@ -83,10 +91,12 @@ update msg model =
                             )
                         )
                         model.groceries
-            }
+              }
+            , Cmd.none
+            )
 
         FocusFood foodId ->
-            { model
+            ( { model
                 | groceries =
                     Maybe.map
                         (List.map
@@ -99,10 +109,12 @@ update msg model =
                             )
                         )
                         model.groceries
-            }
+              }
+            , Cmd.none
+            )
 
         ToggleFoodStatus foodId ->
-            { model
+            ( { model
                 | groceries =
                     Maybe.map
                         (List.map
@@ -115,14 +127,19 @@ update msg model =
                             )
                         )
                         model.groceries
-            }
+              }
+            , Cmd.none
+            )
 
 
 navbar : Html Msg
 navbar =
     nav [ class "navbar is-primary is-fixed-top", attribute "role" "navigation", attribute "aria-label" "main navigation" ]
-        [ div [ class "navbar-brand" ]
-            [ span [ class "navbar-item" ] [ text "Groceries \u{1F957}" ]
+        [ div [ class "navbar-brand", css [ Css.width (pct 100) ] ]
+            [ div [ class "navbar-item" ] [ text "Zucchini \u{1F957}" ]
+            , div [ css [ marginLeft auto, marginRight (px 10), marginTop (px 8) ] ]
+                [ button [ type_ "button", class "button", onClick ClearFoods ] [ text "♻️" ]
+                ]
             ]
         ]
 
@@ -157,6 +174,7 @@ foodElem food =
             , onInput (SetFoodText food.id)
             , Html.Styled.Attributes.disabled food.bought
             , placeholder "Food..."
+            , id food.id
             , css
                 [ textTransform capitalize
                 , borderStyle none
@@ -183,6 +201,21 @@ foodElem food =
         ]
 
 
+addButton : Html Msg
+addButton =
+    button
+        [ css
+            [ position fixed
+            , bottom (px 10)
+            , right (px 10)
+            , boxShadow4 (px 0) (px 10) (px 20) (rgba 0 0 0 0.19)
+            ]
+        , class "button is-primary"
+        , onClick CreateFood
+        ]
+        [ text "Add" ]
+
+
 view : Model -> Html Msg
 view model =
     div
@@ -196,15 +229,13 @@ view model =
                         List.map foodElem groceries
 
                     Nothing ->
-                        []
+                        [ article [ class "message", css [ margin (px 10) ] ]
+                            [ div [ class "message-body" ]
+                                [ text "There are no items in your basket yet. Try adding some by tapping the \"Add\" button in the bottom right"
+                                ]
+                            ]
+                        ]
                 )
-            , div [ class "container" ]
-                [ button
-                    [ css [ margin (px 10) ]
-                    , class "button is-primary"
-                    , onClick CreateFood
-                    ]
-                    [ text "New" ]
-                ]
+            , addButton
             ]
         ]
