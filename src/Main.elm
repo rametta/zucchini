@@ -8,6 +8,7 @@ import Html.Styled.Attributes exposing (..)
 import Html.Styled.Events exposing (onClick, onFocus, onInput)
 import Http
 import Json.Decode exposing (Decoder, bool, field, list, map2, string)
+import Json.Encode as Encode
 
 
 
@@ -50,12 +51,13 @@ type alias FSDocumentFields =
 
 
 type Msg
-    = CreateFood
-    | ClearFoods
+    = --CreateFood
+      ClearFoods
     | ToggleFoodStatus String
     | FocusFood String
     | SetFoodText String String
     | ReceiveFoods (Result Http.Error (List FSDocument))
+    | RequestNewFood
 
 
 main : Program () Model Msg
@@ -79,6 +81,27 @@ getFoods =
         { url = firestoreUrl "documents/foods"
         , expect = Http.expectJson ReceiveFoods documentsDecoder
         }
+
+
+postFood : Cmd Msg
+postFood =
+    Http.post
+        { url = firestoreUrl "documents/foods"
+        , body = Http.jsonBody (encodeFood (Food "" "" False False))
+        , expect = Http.expectJson ReceiveFoods documentsDecoder
+        }
+
+
+encodeFood : Food -> Encode.Value
+encodeFood food =
+    Encode.object
+        [ ( "fields"
+          , Encode.object
+                [ ( "title", Encode.object [ ( "stringValue", Encode.string food.title ) ] )
+                , ( "bought", Encode.object [ ( "booleanValue", Encode.bool food.bought ) ] )
+                ]
+          )
+        ]
 
 
 documentsDecoder : Decoder (List FSDocument)
@@ -136,14 +159,12 @@ init _ =
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     case msg of
-        CreateFood ->
-            case model.groceries of
-                Just items ->
-                    ( { model | groceries = Just (createFood :: items) }, Cmd.none )
-
-                Nothing ->
-                    ( { model | groceries = Just [ createFood ] }, Cmd.none )
-
+        -- CreateFood ->
+        --     case model.groceries of
+        --         Just items ->
+        --             ( { model | groceries = Just (createFood :: items) }, Cmd.none )
+        --         Nothing ->
+        --             ( { model | groceries = Just [ createFood ] }, Cmd.none )
         ClearFoods ->
             ( { groceries = Nothing, error = Nothing }, Cmd.none )
 
@@ -208,6 +229,9 @@ update msg model =
 
                 Err errText ->
                     ( { model | error = Just "Could not get saved food..." }, Cmd.none )
+
+        RequestNewFood ->
+            ( model, postFood )
 
 
 navbar : Model -> Html Msg
@@ -302,7 +326,7 @@ addButton =
             , boxShadow4 (px 0) (px 10) (px 20) (rgba 0 0 0 0.19)
             ]
         , class "button is-primary"
-        , onClick CreateFood
+        , onClick RequestNewFood
         ]
         [ text "Add" ]
 
