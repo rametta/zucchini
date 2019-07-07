@@ -6,6 +6,17 @@ import Css.Transitions exposing (easeInOut, transition)
 import Html.Styled exposing (..)
 import Html.Styled.Attributes exposing (..)
 import Html.Styled.Events exposing (onClick, onFocus, onInput)
+import Http
+import Json.Decode exposing (Decoder, bool, field, list, map2, string)
+
+
+
+-- type RemoteData suc
+--     = Initial
+--     | Fetching
+--     | Success suc
+--     | Error String
+-- RemoteData (Maybe (List Food))
 
 
 type alias Food =
@@ -17,7 +28,25 @@ type alias Food =
 
 
 type alias Model =
-    { groceries : Maybe (List Food) }
+    { error : Maybe String
+    , groceries : Maybe (List Food)
+    }
+
+
+type alias FSDocuments =
+    { documents : List FSDocument }
+
+
+type alias FSDocument =
+    { name : String
+    , fields : FSDocumentFields
+    }
+
+
+type alias FSDocumentFields =
+    { title : String
+    , bought : Bool
+    }
 
 
 type Msg
@@ -26,6 +55,7 @@ type Msg
     | ToggleFoodStatus String
     | FocusFood String
     | SetFoodText String String
+    | ReceiveFoods (Result Http.Error (List FSDocument))
 
 
 main : Program () Model Msg
@@ -36,6 +66,52 @@ main =
         , update = update
         , subscriptions = subscriptions
         }
+
+
+firestoreUrl : String -> String
+firestoreUrl path =
+    "https://firestore.googleapis.com/v1/projects/zucchini-246013/databases/(default)/" ++ path ++ "?key=AIzaSyDbgLlOX3xa7dexgm0uEe_tqyWBsGf0eDc"
+
+
+getFoods : Cmd Msg
+getFoods =
+    Http.get
+        { url = firestoreUrl "documents/foods"
+        , expect = Http.expectJson ReceiveFoods documentsDecoder
+        }
+
+
+documentsDecoder : Decoder (List FSDocument)
+documentsDecoder =
+    field "documents" (list documentDecoder)
+
+
+documentDecoder : Decoder FSDocument
+documentDecoder =
+    map2 FSDocument
+        (field "name" string)
+        (field "fields" fieldsDecoder)
+
+
+fieldsDecoder : Decoder FSDocumentFields
+fieldsDecoder =
+    map2 FSDocumentFields
+        (field "title" (field "stringValue" string))
+        (field "bought" (field "booleanValue" bool))
+
+
+fsDocumentToFood : FSDocument -> Food
+fsDocumentToFood doc =
+    { id = doc.name
+    , title = doc.fields.title
+    , bought = doc.fields.bought
+    , active = False
+    }
+
+
+fsDocumentsToFoods : List FSDocument -> List Food
+fsDocumentsToFoods =
+    List.map fsDocumentToFood
 
 
 subscriptions : Model -> Sub Msg
@@ -50,16 +126,10 @@ createFood =
 
 init : () -> ( Model, Cmd Msg )
 init _ =
-    ( { groceries =
-            Just
-                [ Food "a" "Cheese" False False
-                , Food "b" "Bread" False True
-                , Food "c" "coffee" True False
-                , Food "d" "white wine" True False
-                , Food "e" "jam" False False
-                ]
+    ( { groceries = Nothing
+      , error = Nothing
       }
-    , Cmd.none
+    , getFoods
     )
 
 
@@ -75,7 +145,7 @@ update msg model =
                     ( { model | groceries = Just [ createFood ] }, Cmd.none )
 
         ClearFoods ->
-            ( { groceries = Nothing }, Cmd.none )
+            ( { groceries = Nothing, error = Nothing }, Cmd.none )
 
         SetFoodText foodId text ->
             ( { model
@@ -131,14 +201,35 @@ update msg model =
             , Cmd.none
             )
 
+        ReceiveFoods result ->
+            case result of
+                Ok groceries ->
+                    ( { model | groceries = Just (fsDocumentsToFoods groceries) }, Cmd.none )
 
-navbar : Html Msg
-navbar =
+                Err errText ->
+                    ( { model | error = Just "Could not get saved food..." }, Cmd.none )
+
+
+navbar : Model -> Html Msg
+navbar model =
     nav [ class "navbar is-primary is-fixed-top", attribute "role" "navigation", attribute "aria-label" "main navigation" ]
         [ div [ class "navbar-brand", css [ Css.width (pct 100) ] ]
             [ div [ class "navbar-item" ] [ text "Zucchini \u{1F957}" ]
             , div [ css [ marginLeft auto, marginRight (px 10), marginTop (px 8) ] ]
-                [ button [ type_ "button", class "button", onClick ClearFoods ] [ text "♻️" ]
+                [ button
+                    [ type_ "button"
+                    , class "button"
+                    , onClick ClearFoods
+                    , Html.Styled.Attributes.disabled
+                        (case model.error of
+                            Just _ ->
+                                True
+
+                            Nothing ->
+                                False
+                        )
+                    ]
+                    [ text "♻️" ]
                 ]
             ]
         ]
@@ -216,26 +307,40 @@ addButton =
         [ text "Add" ]
 
 
+notify : String -> Bool -> Html Msg
+notify message isDanger =
+    article
+        [ classList [ ( "is-danger", isDanger ) ]
+        , class "message"
+        , css [ margin (px 10) ]
+        ]
+        [ div [ class "message-body" ]
+            [ text message
+            ]
+        ]
+
+
 view : Model -> Html Msg
 view model =
     div
         []
-        [ navbar
+        [ navbar model
         , main_ []
-            [ div
-                [ class "container" ]
-                (case model.groceries of
-                    Just groceries ->
-                        List.map foodElem groceries
+            (case model.error of
+                Just errortext ->
+                    [ notify errortext True ]
 
-                    Nothing ->
-                        [ article [ class "message", css [ margin (px 10) ] ]
-                            [ div [ class "message-body" ]
-                                [ text "There are no items in your basket yet. Try adding some by tapping the \"Add\" button in the bottom right"
+                Nothing ->
+                    [ div [ class "container" ]
+                        (case model.groceries of
+                            Just groceries ->
+                                List.map foodElem groceries
+
+                            Nothing ->
+                                [ notify "There are no items in your basket yet. Try adding some by tapping the \"Add\" button in the bottom right" False
                                 ]
-                            ]
-                        ]
-                )
-            , addButton
-            ]
+                        )
+                    , addButton
+                    ]
+            )
         ]
