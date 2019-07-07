@@ -4,7 +4,9 @@
   "description": "Elm app to track groceries",
   "main": "index.js",
   "scripts": {
-    "dev": "parcel index.html"
+    "dev": "parcel index.html",
+    "build": "rm -rf dist && parcel build index.html",
+    "deploy": "npm run build && firebase deploy"
   },
   "keywords": [
     "elm",
@@ -15,6 +17,7 @@
   "devDependencies": {
     "elm": "^0.19.0-no-deps",
     "elm-hot": "^1.1.0",
+    "firebase-tools": "^7.0.2",
     "node-elm-compiler": "^5.0.3",
     "parcel": "^1.12.3"
   }

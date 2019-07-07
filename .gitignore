@@ -1,4 +1,5 @@
 node_modules
 .cache
+.firebase
 dist
 elm-stuff
