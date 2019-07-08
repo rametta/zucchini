@@ -1,6 +1,6 @@
 {
-  "name": "Zucchini 🥗",
-  "short_name": "Zucchini 🥗",
+  "name": "Zucchini",
+  "short_name": "Zucchini",
   "start_url": "/",
   "description": "An app for remembering what to buy. Built with Elm lang.",
   "icons": [

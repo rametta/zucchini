@@ -2,7 +2,7 @@
 <html lang="en" class="has-navbar-fixed-top">
 
 <head>
-  <title>Zucchini 🥗</title>
+  <title>Zucchini</title>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="description" content="An app for remembering what to buy. Built with Elm lang.">
@@ -22,6 +22,18 @@
 <body>
   <div id="app">Loading...</div>
   <script src="./index.js"></script>
+  <script>
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', function () {
+        var swjs = '/service-worker.js'
+        navigator.serviceWorker.register(swjs).then(function (registration) {
+          console.log('ServiceWorker registration successful with scope: ', registration.scope);
+        }, function (err) {
+          console.log('ServiceWorker registration failed: ', err);
+        });
+      });
+    }
+  </script>
 </body>
 
 </html>
