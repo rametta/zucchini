@@ -5,7 +5,7 @@ import Css exposing (..)
 import Css.Transitions exposing (easeInOut, transition)
 import Html.Styled exposing (..)
 import Html.Styled.Attributes exposing (..)
-import Html.Styled.Events exposing (onBlur, onClick, onFocus, onInput)
+import Html.Styled.Events exposing (onBlur, onClick, onFocus, onInput, onSubmit)
 import Http
 import Json.Decode exposing (Decoder, bool, field, int, list, map2, map3, string)
 import Json.Encode as Encode
@@ -14,7 +14,7 @@ import Json.Encode as Encode
 
 -- type RemoteData suc
 --     = Initial
---     | Fetching
+--     | Loading
 --     | Success suc
 --     | Error String
 -- RemoteData (Maybe (List Food))
@@ -33,6 +33,8 @@ type alias Food =
 type alias Model =
     { error : Maybe String
     , groceries : Maybe (List Food)
+    , newText : String
+    , newItemLoading : Bool
     }
 
 
@@ -58,12 +60,14 @@ type Msg
     | ToggleFoodStatus Food
     | FocusFood String
     | SetFoodText String String
+    | SetNewText String
     | ReceiveFoods (Result Http.Error (List FSDocument))
     | ReceiveFood (Result Http.Error FSDocument)
     | ReceiveFoodUpdate (Result Http.Error FSDocument)
     | ReceiveFoodDelete (Result Http.Error ())
     | RequestNewFood
     | RequestPatchFood Food
+    | RequestDeleteFood String
 
 
 main : Program () Model Msg
@@ -99,11 +103,11 @@ getFoods =
         }
 
 
-postFood : Int -> Cmd Msg
-postFood order =
+postFood : Food -> Cmd Msg
+postFood food =
     Http.post
         { url = firestoreUrl "documents/foods"
-        , body = Http.jsonBody (encodeFood (Food "" "" False False False order))
+        , body = Http.jsonBody (encodeFood food)
         , expect = Http.expectJson ReceiveFood documentDecoder
         }
 
@@ -121,15 +125,15 @@ patchFood food =
         }
 
 
-deleteFood : Food -> Cmd Msg
-deleteFood food =
+deleteFood : String -> Cmd Msg
+deleteFood foodId =
     Http.request
         { method = "Delete"
         , headers = []
         , timeout = Nothing
         , tracker = Nothing
-        , url = base ++ food.id ++ key
-        , body = Http.jsonBody (encodeFood food)
+        , url = base ++ foodId ++ key
+        , body = Http.emptyBody
         , expect = Http.expectWhatever ReceiveFoodDelete
         }
 
@@ -225,6 +229,8 @@ init : () -> ( Model, Cmd Msg )
 init _ =
     ( { groceries = Nothing
       , error = Nothing
+      , newText = ""
+      , newItemLoading = False
       }
     , getFoods
     )
@@ -233,8 +239,11 @@ init _ =
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     case msg of
+        SetNewText t ->
+            ( { model | newText = t }, Cmd.none )
+
         ClearFoods ->
-            ( { groceries = Nothing, error = Nothing }, Cmd.none )
+            init ()
 
         SetFoodText foodId text ->
             ( { model
@@ -311,13 +320,30 @@ update msg model =
                     in
                     case model.groceries of
                         Just items ->
-                            ( { model | groceries = Just (food :: items) }, Cmd.none )
+                            ( { model
+                                | groceries = Just (food :: items)
+                                , newText = ""
+                                , newItemLoading = False
+                              }
+                            , Cmd.none
+                            )
 
                         Nothing ->
-                            ( { model | groceries = Just [ food ] }, Cmd.none )
+                            ( { model
+                                | groceries = Just [ food ]
+                                , newText = ""
+                                , newItemLoading = False
+                              }
+                            , Cmd.none
+                            )
 
                 Err err ->
-                    ( { model | error = Just (extractTextFromError err) }, Cmd.none )
+                    ( { model
+                        | error = Just (extractTextFromError err)
+                        , newItemLoading = False
+                      }
+                    , Cmd.none
+                    )
 
         ReceiveFoodDelete result ->
             case result of
@@ -356,7 +382,7 @@ update msg model =
 
         RequestNewFood ->
             let
-                count =
+                order =
                     case model.groceries of
                         Just items ->
                             List.length items
@@ -364,7 +390,11 @@ update msg model =
                         Nothing ->
                             0
             in
-            ( model, postFood count )
+            if String.isEmpty model.newText then
+                ( model, Cmd.none )
+
+            else
+                ( { model | newItemLoading = True }, postFood (Food "" model.newText False False False order) )
 
         RequestPatchFood food ->
             if food.changed then
@@ -373,28 +403,15 @@ update msg model =
             else
                 ( model, Cmd.none )
 
+        RequestDeleteFood foodId ->
+            ( model, deleteFood foodId )
+
 
 navbar : Model -> Html Msg
 navbar model =
     nav [ class "navbar is-primary is-fixed-top", attribute "role" "navigation", attribute "aria-label" "main navigation" ]
-        [ div [ class "navbar-brand", css [ Css.width (pct 100) ] ]
+        [ div [ class "navbar-brand" ]
             [ div [ class "navbar-item" ] [ text "Zucchini \u{1F957}" ]
-            , div [ css [ marginLeft auto, marginRight (px 10), marginTop (px 8) ] ]
-                [ button
-                    [ type_ "button"
-                    , class "button"
-                    , onClick ClearFoods
-                    , Html.Styled.Attributes.disabled
-                        (case model.error of
-                            Just _ ->
-                                True
-
-                            Nothing ->
-                                False
-                        )
-                    ]
-                    [ text "♻️" ]
-                ]
             ]
         ]
 
@@ -414,7 +431,7 @@ foodElem food =
                 solid
                 (case food.active of
                     True ->
-                        hsl 171 100 0.41
+                        hsl 171 1 0.41
 
                     False ->
                         hex "d6d6d6"
@@ -422,7 +439,20 @@ foodElem food =
             , displayFlex
             ]
         ]
-        [ input
+        [ button
+            [ class "button is-small"
+            , onClick (ToggleFoodStatus food)
+            ]
+            [ text
+                (case food.bought of
+                    True ->
+                        "❌"
+
+                    False ->
+                        "✔️"
+                )
+            ]
+        , input
             [ type_ "text"
             , value food.title
             , onFocus (FocusFood food.id)
@@ -443,33 +473,11 @@ foodElem food =
             []
         , button
             [ class "button is-small"
-            , onClick (ToggleFoodStatus food)
+            , onClick (RequestDeleteFood food.id)
             ]
-            [ text
-                (case food.bought of
-                    True ->
-                        "❌"
-
-                    False ->
-                        "✔️"
-                )
+            [ text "🗑️"
             ]
         ]
-
-
-addButton : Html Msg
-addButton =
-    button
-        [ css
-            [ position fixed
-            , bottom (px 10)
-            , right (px 10)
-            , boxShadow4 (px 0) (px 10) (px 20) (rgba 0 0 0 0.19)
-            ]
-        , class "button is-primary"
-        , onClick RequestNewFood
-        ]
-        [ text "Add" ]
 
 
 notify : String -> Bool -> Html Msg
@@ -485,6 +493,37 @@ notify message isDanger =
         ]
 
 
+addForm : Model -> Html Msg
+addForm model =
+    Html.Styled.form [ class "field has-addons", onSubmit RequestNewFood ]
+        [ div [ class "control", css [ flex (num 1) ] ]
+            [ input
+                [ type_ "text"
+                , placeholder "New..."
+                , value model.newText
+                , onInput SetNewText
+                , class "input is-large"
+                , Html.Styled.Attributes.disabled model.newItemLoading
+                , css
+                    [ Css.width (pct 100)
+                    , borderBottom3 (px 1) solid (hsl 171 1 0.41)
+                    , borderRadius (px 0)
+                    ]
+                ]
+                []
+            ]
+        , div [ class "control" ]
+            [ button
+                [ classList [ ( "is-loading", model.newItemLoading ) ]
+                , class "button is-large is-primary"
+                , css [ borderRadius (px 0) ]
+                , Html.Styled.Attributes.disabled (String.isEmpty model.newText)
+                ]
+                [ text "Add" ]
+            ]
+        ]
+
+
 view : Model -> Html Msg
 view model =
     div
@@ -496,18 +535,19 @@ view model =
                     [ notify errortext True ]
 
                 Nothing ->
-                    [ div [ class "container" ]
+                    [ addForm model
+                    , div [ class "container" ]
                         (case model.groceries of
                             Just groceries ->
                                 groceries
                                     |> List.sortBy .order
+                                    |> List.reverse
                                     |> List.map foodElem
 
                             Nothing ->
                                 [ notify "There are no items in your basket yet. Try adding some by tapping the \"Add\" button in the bottom right" False
                                 ]
                         )
-                    , addButton
                     ]
             )
         ]
