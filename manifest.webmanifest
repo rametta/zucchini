@@ -1,0 +1,21 @@
+{
+  "name": "Zucchini 🥗",
+  "short_name": "Zucchini 🥗",
+  "start_url": "/",
+  "description": "An app for remembering what to buy. Built with Elm lang.",
+  "icons": [
+    {
+      "src": "public/android-chrome-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "public/android-chrome-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ],
+  "theme_color": "#00d1b2",
+  "background_color": "#ffffff",
+  "display": "standalone"
+}
