@@ -7,7 +7,7 @@ import Html.Styled exposing (..)
 import Html.Styled.Attributes exposing (..)
 import Html.Styled.Events exposing (onBlur, onClick, onFocus, onInput, onSubmit)
 import Http
-import Json.Decode exposing (Decoder, bool, field, int, list, map2, map3, string)
+import Json.Decode exposing (Decoder, bool, field, int, list, map2, map3, maybe, string)
 import Json.Encode as Encode
 
 
@@ -61,7 +61,7 @@ type Msg
     | FocusFood String
     | SetFoodText String String
     | SetNewText String
-    | ReceiveFoods (Result Http.Error (List FSDocument))
+    | ReceiveFoods (Result Http.Error (Maybe (List FSDocument)))
     | ReceiveFood (Result Http.Error FSDocument)
     | ReceiveFoodUpdate (Result Http.Error FSDocument)
     | ReceiveFoodDelete (Result Http.Error ())
@@ -151,9 +151,9 @@ encodeFood food =
         ]
 
 
-documentsDecoder : Decoder (List FSDocument)
+documentsDecoder : Decoder (Maybe (List FSDocument))
 documentsDecoder =
-    field "documents" (list documentDecoder)
+    maybe (field "documents" (list documentDecoder))
 
 
 documentDecoder : Decoder FSDocument
@@ -306,7 +306,12 @@ update msg model =
         ReceiveFoods result ->
             case result of
                 Ok groceries ->
-                    ( { model | groceries = Just (fsDocumentsToFoods groceries) }, Cmd.none )
+                    case groceries of
+                        Just items ->
+                            ( { model | groceries = Just (fsDocumentsToFoods items) }, Cmd.none )
+
+                        Nothing ->
+                            ( { model | groceries = Nothing }, Cmd.none )
 
                 Err err ->
                     ( { model | error = Just (extractTextFromError err) }, Cmd.none )
@@ -545,7 +550,7 @@ view model =
                                     |> List.map foodElem
 
                             Nothing ->
-                                [ notify "There are no items in your basket yet. Try adding some by tapping the \"Add\" button in the bottom right" False
+                                [ notify "There are no items in your basket yet. Try adding some by tapping the \"Add\" button above" False
                                 ]
                         )
                     ]
