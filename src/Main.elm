@@ -425,9 +425,7 @@ foodElem : Food -> Html Msg
 foodElem food =
     div
         [ css
-            [ margin (px 10)
-            , Css.height (px 30)
-            , transition
+            [ transition
                 [ Css.Transitions.borderColor 250
                 , Css.Transitions.transform3 250 0 easeInOut
                 ]
@@ -439,48 +437,65 @@ foodElem food =
                         hsl 171 1 0.41
 
                     False ->
-                        hex "d6d6d6"
+                        hex "ededed"
                 )
             , displayFlex
+            , alignItems center
             ]
         ]
         [ button
-            [ class "button is-small"
+            [ class "button"
+            , css [ borderRadius (pct 50), margin (px 5) ]
             , onClick (ToggleFoodStatus food)
             ]
-            [ text
-                (case food.bought of
-                    True ->
-                        "❌"
+            [ case food.bought of
+                True ->
+                    span [ css [ color (hex "00d1b2") ], class "icon" ] [ i [ class "fas fa-check fa-lg" ] [] ]
 
-                    False ->
-                        "✔️"
-                )
+                False ->
+                    span [ class "icon" ] []
             ]
-        , input
-            [ type_ "text"
-            , value food.title
-            , onFocus (FocusFood food.id)
-            , onInput (SetFoodText food.id)
-            , onBlur (RequestPatchFood food)
-            , Html.Styled.Attributes.disabled food.bought
-            , placeholder "Food..."
-            , id food.id
-            , css
-                [ textTransform capitalize
-                , borderStyle none
-                , Css.height (pct 100)
-                , Css.width (pct 100)
-                , fontSize (px 16)
-                , outline none
-                ]
-            ]
-            []
+        , case food.bought of
+            True ->
+                div
+                    [ css
+                        [ padding (px 10)
+                        , flex (num 1)
+                        , Css.color (hex "b8b8b8")
+                        , textDecoration lineThrough
+                        , lineHeight (num 1)
+                        , textTransform capitalize
+                        ]
+                    ]
+                    [ text food.title ]
+
+            False ->
+                input
+                    [ type_ "text"
+                    , value food.title
+                    , onFocus (FocusFood food.id)
+                    , onInput (SetFoodText food.id)
+                    , onBlur (RequestPatchFood food)
+                    , Html.Styled.Attributes.disabled food.bought
+                    , placeholder "Food..."
+                    , id food.id
+                    , css
+                        [ textTransform capitalize
+                        , borderStyle none
+                        , Css.height (pct 100)
+                        , Css.width (pct 100)
+                        , fontSize (px 16)
+                        , outline none
+                        , padding (px 10)
+                        ]
+                    ]
+                    []
         , button
-            [ class "button is-small"
+            [ class "button"
             , onClick (RequestDeleteFood food.id)
+            , css [ borderRadius (pct 50), margin (px 5) ]
             ]
-            [ text "🗑️"
+            [ span [ css [ color (hex "cccccc") ], class "icon" ] [ i [ class "fas fa-trash fa-lg" ] [] ]
             ]
         ]
 
@@ -500,7 +515,16 @@ notify message isDanger =
 
 addForm : Model -> Html Msg
 addForm model =
-    Html.Styled.form [ class "field has-addons", onSubmit RequestNewFood ]
+    Html.Styled.form
+        [ css
+            [ position fixed
+            , bottom (px 0)
+            , Css.width (pct 100)
+            , backgroundColor (hex "fff")
+            ]
+        , class "field has-addons"
+        , onSubmit RequestNewFood
+        ]
         [ div [ class "control", css [ flex (num 1) ] ]
             [ input
                 [ type_ "text"
@@ -511,7 +535,6 @@ addForm model =
                 , Html.Styled.Attributes.disabled model.newItemLoading
                 , css
                     [ Css.width (pct 100)
-                    , borderBottom3 (px 1) solid (hsl 171 1 0.41)
                     , borderRadius (px 0)
                     ]
                 ]
@@ -540,8 +563,7 @@ view model =
                     [ notify errortext True ]
 
                 Nothing ->
-                    [ addForm model
-                    , div [ class "container" ]
+                    [ div [ class "container" ]
                         (case model.groceries of
                             Just groceries ->
                                 groceries
@@ -550,9 +572,10 @@ view model =
                                     |> List.map foodElem
 
                             Nothing ->
-                                [ notify "There are no items in your basket yet. Try adding some by tapping the \"Add\" button above" False
+                                [ notify "There are no items in your basket yet. Try adding some by tapping the \"Add\" button below" False
                                 ]
                         )
+                    , addForm model
                     ]
             )
         ]

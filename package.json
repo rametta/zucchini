@@ -20,6 +20,7 @@
     "firebase-tools": "^7.0.2",
     "node-elm-compiler": "^5.0.3",
     "parcel": "^1.12.3",
+    "parcel-bundler": "^1.12.3",
     "parcel-plugin-sw-precache": "^1.1.1"
   }
 }
