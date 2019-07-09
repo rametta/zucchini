@@ -429,6 +429,7 @@ foodElem food =
                     , onInput (SetFoodText food)
                     , onBlur (RequestPatchFood food)
                     , Html.Styled.Attributes.disabled food.bought
+                    , attribute "aria-label" "Food"
                     , placeholder "Food..."
                     , id food.id
                     , css
@@ -484,6 +485,7 @@ addForm model =
                 , value model.newText
                 , onInput SetNewText
                 , class "input is-large"
+                , attribute "aria-label" "New"
                 , Html.Styled.Attributes.disabled model.newItemLoading
                 , css
                     [ Css.width (pct 100)
