@@ -4,7 +4,7 @@
   "description": "Elm app to track groceries",
   "main": "index.js",
   "scripts": {
-    "dev": "parcel index.html",
+    "dev": "node devserver.js",
     "build": "rm -rf dist && parcel build index.html",
     "deploy": "npm run build && netlify deploy --prod"
   },
@@ -21,6 +21,7 @@
     "node-elm-compiler": "^5.0.3",
     "parcel": "^1.12.3",
     "parcel-bundler": "^1.12.3",
-    "parcel-plugin-sw-precache": "^1.1.1"
+    "parcel-plugin-sw-precache": "^1.1.1",
+    "parcel-proxy-server": "^1.1.0"
   }
 }

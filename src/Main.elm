@@ -11,13 +11,9 @@ import Json.Decode exposing (Decoder, bool, field, int, list, map2, map3, maybe,
 import Json.Encode as Encode
 
 
-
--- type RemoteData suc
---     = Initial
---     | Loading
---     | Success suc
---     | Error String
--- RemoteData (Maybe (List Food))
+type Status
+    = Loading
+    | Complete
 
 
 type alias Food =
@@ -31,8 +27,9 @@ type alias Food =
 
 
 type alias Model =
-    { error : Maybe String
-    , groceries : Maybe (List Food)
+    { initialLoad : Status
+    , error : Maybe String
+    , groceries : List Food
     , newText : String
     , newItemLoading : Bool
     }
@@ -222,13 +219,19 @@ extractTextFromError err =
 
 init : () -> ( Model, Cmd Msg )
 init _ =
-    ( { groceries = Nothing
+    ( { initialLoad = Loading
+      , groceries = []
       , error = Nothing
       , newText = ""
       , newItemLoading = False
       }
     , getFoods
     )
+
+
+sortFoods : List Food -> List Food
+sortFoods =
+    List.reverse << List.sortBy .order
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
@@ -243,15 +246,13 @@ update msg model =
         SetFoodText foodId text ->
             ( { model
                 | groceries =
-                    Maybe.map
-                        (List.map
-                            (\fd ->
-                                if fd.id == foodId then
-                                    { fd | title = text, changed = True }
+                    List.map
+                        (\fd ->
+                            if fd.id == foodId then
+                                { fd | title = text, changed = True }
 
-                                else
-                                    fd
-                            )
+                            else
+                                fd
                         )
                         model.groceries
               }
@@ -261,15 +262,13 @@ update msg model =
         FocusFood foodId ->
             ( { model
                 | groceries =
-                    Maybe.map
-                        (List.map
-                            (\fd ->
-                                if fd.id == foodId then
-                                    { fd | active = True }
+                    List.map
+                        (\fd ->
+                            if fd.id == foodId then
+                                { fd | active = True }
 
-                                else
-                                    { fd | active = False }
-                            )
+                            else
+                                { fd | active = False }
                         )
                         model.groceries
               }
@@ -283,15 +282,13 @@ update msg model =
             in
             ( { model
                 | groceries =
-                    Maybe.map
-                        (List.map
-                            (\fd ->
-                                if fd.id == food.id then
-                                    newFood
+                    List.map
+                        (\fd ->
+                            if fd.id == food.id then
+                                newFood
 
-                                else
-                                    fd
-                            )
+                            else
+                                fd
                         )
                         model.groceries
               }
@@ -303,13 +300,18 @@ update msg model =
                 Ok groceries ->
                     case groceries of
                         Just items ->
-                            ( { model | groceries = Just (fsDocumentsToFoods items) }, Cmd.none )
+                            ( { model
+                                | groceries = items |> fsDocumentsToFoods |> sortFoods
+                                , initialLoad = Complete
+                              }
+                            , Cmd.none
+                            )
 
                         Nothing ->
-                            ( { model | groceries = Nothing }, Cmd.none )
+                            ( { model | groceries = [], initialLoad = Complete }, Cmd.none )
 
                 Err err ->
-                    ( { model | error = Just (extractTextFromError err) }, Cmd.none )
+                    ( { model | error = Just (extractTextFromError err), initialLoad = Complete }, Cmd.none )
 
         ReceiveFood result ->
             case result of
@@ -318,24 +320,13 @@ update msg model =
                         food =
                             fsDocumentToFood foodDoc
                     in
-                    case model.groceries of
-                        Just items ->
-                            ( { model
-                                | groceries = Just (food :: items)
-                                , newText = ""
-                                , newItemLoading = False
-                              }
-                            , Cmd.none
-                            )
-
-                        Nothing ->
-                            ( { model
-                                | groceries = Just [ food ]
-                                , newText = ""
-                                , newItemLoading = False
-                              }
-                            , Cmd.none
-                            )
+                    ( { model
+                        | groceries = sortFoods (food :: model.groceries)
+                        , newText = ""
+                        , newItemLoading = False
+                      }
+                    , Cmd.none
+                    )
 
                 Err err ->
                     ( { model
@@ -350,8 +341,8 @@ update msg model =
                 Ok _ ->
                     ( model, getFoods )
 
-                Err _ ->
-                    ( model, Cmd.none )
+                Err err ->
+                    ( { model | error = Just (extractTextFromError err) }, Cmd.none )
 
         ReceiveFoodUpdate result ->
             case result of
@@ -362,15 +353,13 @@ update msg model =
                     in
                     ( { model
                         | groceries =
-                            Maybe.map
-                                (List.map
-                                    (\fd ->
-                                        if fd.id == newFood.id then
-                                            newFood
+                            List.map
+                                (\fd ->
+                                    if fd.id == newFood.id then
+                                        newFood
 
-                                        else
-                                            fd
-                                    )
+                                    else
+                                        fd
                                 )
                                 model.groceries
                       }
@@ -381,20 +370,20 @@ update msg model =
                     ( { model | error = Just (extractTextFromError err) }, Cmd.none )
 
         RequestNewFood ->
-            let
-                order =
-                    case model.groceries of
-                        Just items ->
-                            List.length items
-
-                        Nothing ->
-                            0
-            in
             if String.isEmpty model.newText then
                 ( model, Cmd.none )
 
             else
-                ( { model | newItemLoading = True }, postFood (Food "" model.newText False False False order) )
+                ( { model | newItemLoading = True }
+                , postFood
+                    { id = ""
+                    , title = model.newText
+                    , bought = False
+                    , active = False
+                    , changed = False
+                    , order = List.length model.groceries
+                    }
+                )
 
         RequestPatchFood food ->
             if food.changed then
@@ -404,7 +393,11 @@ update msg model =
                 ( model, Cmd.none )
 
         RequestDeleteFood foodId ->
-            ( model, deleteFood foodId )
+            let
+                newFoods =
+                    List.filter (\food -> not (food.id == foodId)) model.groceries
+            in
+            ( { model | groceries = newFoods }, deleteFood foodId )
 
 
 navbar : Model -> Html Msg
@@ -553,24 +546,26 @@ view model =
         []
         [ navbar model
         , main_ []
-            (case model.error of
+            [ case model.error of
                 Just errortext ->
-                    [ notify errortext True ]
+                    notify errortext True
 
                 Nothing ->
-                    [ div [ class "container" ]
-                        (case model.groceries of
-                            Just groceries ->
-                                groceries
-                                    |> List.sortBy .order
-                                    |> List.reverse
-                                    |> List.map foodElem
+                    text ""
+            , div [ class "container" ]
+                (case model.initialLoad of
+                    Loading ->
+                        []
 
-                            Nothing ->
-                                [ notify "There are no items in your basket yet. Try adding some by tapping the \"Add\" button below" False
+                    Complete ->
+                        case List.isEmpty model.groceries of
+                            False ->
+                                List.map foodElem model.groceries
+
+                            True ->
+                                [ notify "There are no items in your basket. Try adding some by tapping the \"Add\" button below" False
                                 ]
-                        )
-                    , addForm model
-                    ]
-            )
+                )
+            , addForm model
+            ]
         ]
