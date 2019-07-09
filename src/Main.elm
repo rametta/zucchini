@@ -399,6 +399,7 @@ foodElem food =
             [ class "button"
             , css [ borderRadius (pct 50), margin (px 5) ]
             , onClick (ToggleFoodStatus food)
+            , attribute "aria-label" "toggle"
             ]
             [ case food.bought of
                 True ->
@@ -445,6 +446,7 @@ foodElem food =
                     []
         , button
             [ class "button"
+            , attribute "aria-label" "delete"
             , onClick (RequestDeleteFood food.id)
             , css [ borderRadius (pct 50), margin (px 5) ]
             ]
