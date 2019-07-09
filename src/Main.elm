@@ -80,11 +80,6 @@ main =
         }
 
 
-base : String
-base =
-    "https://firestore.googleapis.com/v1/"
-
-
 key : String
 key =
     "?key=AIzaSyDbgLlOX3xa7dexgm0uEe_tqyWBsGf0eDc"
@@ -92,7 +87,7 @@ key =
 
 firestoreUrl : String -> String
 firestoreUrl path =
-    base ++ "projects/zucchini-246013/databases/(default)/" ++ path ++ key
+    "/api/v1/projects/zucchini-246013/databases/(default)/" ++ path ++ key
 
 
 getFoods : Cmd Msg
@@ -119,7 +114,7 @@ patchFood food =
         , headers = []
         , timeout = Nothing
         , tracker = Nothing
-        , url = base ++ food.id ++ key
+        , url = "/api/v1/" ++ food.id ++ key
         , body = Http.jsonBody (encodeFood food)
         , expect = Http.expectJson ReceiveFoodUpdate documentDecoder
         }
@@ -132,7 +127,7 @@ deleteFood foodId =
         , headers = []
         , timeout = Nothing
         , tracker = Nothing
-        , url = base ++ foodId ++ key
+        , url = "/api/v1/" ++ foodId ++ key
         , body = Http.emptyBody
         , expect = Http.expectWhatever ReceiveFoodDelete
         }
