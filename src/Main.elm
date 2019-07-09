@@ -53,10 +53,9 @@ type alias FSDocumentFields =
 
 
 type Msg
-    = ClearFoods
-    | ToggleFoodStatus Food
-    | FocusFood String
-    | SetFoodText String String
+    = ToggleFoodStatus Food
+    | FocusFood Food
+    | SetFoodText Food String
     | SetNewText String
     | ReceiveFoods (Result Http.Error (Maybe (List FSDocument)))
     | ReceiveFood (Result Http.Error FSDocument)
@@ -179,23 +178,26 @@ fsDocumentsToFoods =
     List.map fsDocumentToFood
 
 
-subscriptions : Model -> Sub Msg
-subscriptions model =
-    Sub.none
-
-
 find : Food -> List Food -> Maybe Food
-find food foods =
-    let
-        filtered =
-            List.filter (\f -> f.id == food.id) foods
-    in
-    case List.isEmpty filtered of
-        True ->
-            Nothing
+find food =
+    List.head << List.filter (\f -> f.id == food.id)
 
-        False ->
-            List.head filtered
+
+sortFoods : List Food -> List Food
+sortFoods =
+    List.reverse << List.sortBy .order
+
+
+replaceFood : Food -> List Food -> List Food
+replaceFood food =
+    List.map
+        (\fd ->
+            if fd.id == food.id then
+                food
+
+            else
+                fd
+        )
 
 
 extractTextFromError : Http.Error -> String
@@ -217,6 +219,11 @@ extractTextFromError err =
             s
 
 
+subscriptions : Model -> Sub Msg
+subscriptions model =
+    Sub.none
+
+
 init : () -> ( Model, Cmd Msg )
 init _ =
     ( { initialLoad = Loading
@@ -229,42 +236,25 @@ init _ =
     )
 
 
-sortFoods : List Food -> List Food
-sortFoods =
-    List.reverse << List.sortBy .order
-
-
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     case msg of
         SetNewText t ->
             ( { model | newText = t }, Cmd.none )
 
-        ClearFoods ->
-            init ()
+        SetFoodText food text ->
+            let
+                newFood =
+                    { food | title = text, changed = True }
+            in
+            ( { model | groceries = replaceFood newFood model.groceries }, Cmd.none )
 
-        SetFoodText foodId text ->
+        FocusFood food ->
             ( { model
                 | groceries =
                     List.map
                         (\fd ->
-                            if fd.id == foodId then
-                                { fd | title = text, changed = True }
-
-                            else
-                                fd
-                        )
-                        model.groceries
-              }
-            , Cmd.none
-            )
-
-        FocusFood foodId ->
-            ( { model
-                | groceries =
-                    List.map
-                        (\fd ->
-                            if fd.id == foodId then
+                            if fd.id == food.id then
                                 { fd | active = True }
 
                             else
@@ -280,20 +270,7 @@ update msg model =
                 newFood =
                     { food | bought = not food.bought }
             in
-            ( { model
-                | groceries =
-                    List.map
-                        (\fd ->
-                            if fd.id == food.id then
-                                newFood
-
-                            else
-                                fd
-                        )
-                        model.groceries
-              }
-            , patchFood newFood
-            )
+            ( { model | groceries = replaceFood newFood model.groceries }, patchFood newFood )
 
         ReceiveFoods result ->
             case result of
@@ -339,10 +316,10 @@ update msg model =
         ReceiveFoodDelete result ->
             case result of
                 Ok _ ->
-                    ( model, getFoods )
+                    ( model, Cmd.none )
 
                 Err err ->
-                    ( { model | error = Just (extractTextFromError err) }, Cmd.none )
+                    ( { model | error = Just (extractTextFromError err) }, getFoods )
 
         ReceiveFoodUpdate result ->
             case result of
@@ -351,20 +328,7 @@ update msg model =
                         newFood =
                             fsDocumentToFood foodDoc
                     in
-                    ( { model
-                        | groceries =
-                            List.map
-                                (\fd ->
-                                    if fd.id == newFood.id then
-                                        newFood
-
-                                    else
-                                        fd
-                                )
-                                model.groceries
-                      }
-                    , Cmd.none
-                    )
+                    ( { model | groceries = replaceFood newFood model.groceries }, Cmd.none )
 
                 Err err ->
                     ( { model | error = Just (extractTextFromError err) }, Cmd.none )
@@ -381,7 +345,7 @@ update msg model =
                     , bought = False
                     , active = False
                     , changed = False
-                    , order = List.length model.groceries
+                    , order = List.length model.groceries + 1
                     }
                 )
 
@@ -461,8 +425,8 @@ foodElem food =
                 input
                     [ type_ "text"
                     , value food.title
-                    , onFocus (FocusFood food.id)
-                    , onInput (SetFoodText food.id)
+                    , onFocus (FocusFood food)
+                    , onInput (SetFoodText food)
                     , onBlur (RequestPatchFood food)
                     , Html.Styled.Attributes.disabled food.bought
                     , placeholder "Food..."
@@ -533,7 +497,7 @@ addForm model =
                 [ classList [ ( "is-loading", model.newItemLoading ) ]
                 , class "button is-large is-primary"
                 , css [ borderRadius (px 0) ]
-                , Html.Styled.Attributes.disabled (String.isEmpty model.newText)
+                , Html.Styled.Attributes.disabled (String.isEmpty model.newText || model.newItemLoading)
                 ]
                 [ text "Add" ]
             ]
@@ -563,7 +527,7 @@ view model =
                                 List.map foodElem model.groceries
 
                             True ->
-                                [ notify "There are no items in your basket. Try adding some by tapping the \"Add\" button below" False
+                                [ notify "There are no items in your basket. Try adding some by tapping the \"Add\" button below." False
                                 ]
                 )
             , addForm model
