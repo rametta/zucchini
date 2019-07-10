@@ -3,3 +3,7 @@
 # Zucchini 🥗
 
 > Keep track of what you need to buy
+
+**Built with ✨[Elm](https://elm-lang.org/) ✨**
+
+![Zucchini Screenshot](screenshot.png "Zucchini Screenshot")
