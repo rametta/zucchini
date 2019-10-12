@@ -3,5 +3,5 @@
 
 [[redirects]]
   from = "/api/*"
-  to = "https://zucchini-255619.appspot.com/api/:splat"
+  to = "https://zucchini-255619.appspot.com/:splat"
   status = 200
