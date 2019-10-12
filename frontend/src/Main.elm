@@ -40,6 +40,7 @@ type Msg
     | FocusFood Food
     | SetFoodText Food String
     | SetNewText String
+    | GetFoodsRequest
     | PostFoodRequest
     | PutFoodRequest Food
     | DeleteFoodRequest String
@@ -215,6 +216,9 @@ update msg model =
             in
             ( { model | groceries = replaceFood newFood model.groceries }, putFood newFood )
 
+        GetFoodsRequest ->
+            ( { model | initialLoad = Loading, error = Nothing }, getFoods )
+
         GetFoodsResponse res ->
             case res of
                 Ok groceries ->
@@ -303,8 +307,18 @@ update msg model =
 navbar : Model -> Html Msg
 navbar model =
     nav [ class "navbar is-primary is-fixed-top", attribute "role" "navigation", attribute "aria-label" "main navigation" ]
-        [ div [ class "navbar-brand" ]
+        [ div [ class "navbar-brand", css [ displayFlex, alignItems center, justifyContent spaceBetween ] ]
             [ div [ class "navbar-item" ] [ text "Zucchini \u{1F957}" ]
+            , button
+                [ class "button is-primary"
+                , css [ marginRight (px 5) ]
+                , onClick GetFoodsRequest
+                , Html.Styled.Attributes.disabled (model.initialLoad == Loading)
+                ]
+                [ span [ class "icon" ]
+                    [ i [ class "fas fa-sync-alt" ] []
+                    ]
+                ]
             ]
         ]
 
@@ -437,9 +451,12 @@ addForm model =
                 [ classList [ ( "is-loading", model.newItemLoading ) ]
                 , class "button is-large is-primary"
                 , css [ borderRadius (px 0) ]
-                , Html.Styled.Attributes.disabled (String.isEmpty model.newText || model.newItemLoading)
+                , Html.Styled.Attributes.disabled (String.isEmpty model.newText || model.newItemLoading || (model.initialLoad == Loading))
                 ]
-                [ text "Add" ]
+                [ span [ class "icon" ]
+                    [ i [ class "fas fa-plus" ] []
+                    ]
+                ]
             ]
         ]
 
