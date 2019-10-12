@@ -3,5 +3,5 @@
 
 [[redirects]]
   from = "/api/*"
-  to = "https://firestore.googleapis.com/:splat"
+  to = "https://zucchini-255619.appspot.com/api/:splat"
   status = 200

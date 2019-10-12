@@ -7,8 +7,8 @@ import Html.Styled exposing (..)
 import Html.Styled.Attributes exposing (..)
 import Html.Styled.Events exposing (onBlur, onClick, onFocus, onInput, onSubmit)
 import Http
-import Json.Decode exposing (Decoder, bool, field, int, list, map2, map3, maybe, string)
-import Json.Encode as Encode
+import Json.Decode as D
+import Json.Encode as E
 
 
 type Status
@@ -19,10 +19,10 @@ type Status
 type alias Food =
     { id : String
     , title : String
-    , bought : Bool
+    , done : Bool
+    , date : Int
     , active : Bool
     , changed : Bool
-    , order : Int
     }
 
 
@@ -35,35 +35,18 @@ type alias Model =
     }
 
 
-type alias FSDocuments =
-    { documents : List FSDocument }
-
-
-type alias FSDocument =
-    { name : String
-    , fields : FSDocumentFields
-    }
-
-
-type alias FSDocumentFields =
-    { title : String
-    , bought : Bool
-    , order : String
-    }
-
-
 type Msg
     = ToggleFoodStatus Food
     | FocusFood Food
     | SetFoodText Food String
     | SetNewText String
-    | ReceiveFoods (Result Http.Error (Maybe (List FSDocument)))
-    | ReceiveFood (Result Http.Error FSDocument)
-    | ReceiveFoodUpdate (Result Http.Error FSDocument)
-    | ReceiveFoodDelete (Result Http.Error ())
-    | RequestNewFood
-    | RequestPatchFood Food
-    | RequestDeleteFood String
+    | PostFoodRequest
+    | PutFoodRequest Food
+    | DeleteFoodRequest String
+    | GetFoodsResponse (Result Http.Error (Maybe (List Food)))
+    | PostFoodResponse (Result Http.Error Food)
+    | PutFoodResponse (Result Http.Error Food)
+    | DeleteFoodResponse (Result Http.Error ())
 
 
 main : Program () Model Msg
@@ -76,116 +59,76 @@ main =
         }
 
 
-key : String
-key =
-    "?key=AIzaSyDbgLlOX3xa7dexgm0uEe_tqyWBsGf0eDc"
-
-
-firestoreUrl : String -> String
-firestoreUrl path =
-    "/api/v1/projects/zucchini-246013/databases/(default)/" ++ path ++ key
-
-
 getFoods : Cmd Msg
 getFoods =
     Http.get
-        { url = firestoreUrl "documents/foods"
-        , expect = Http.expectJson ReceiveFoods documentsDecoder
+        { url = "/api/food"
+        , expect = Http.expectJson GetFoodsResponse (D.maybe (D.list foodDecoder))
         }
 
 
 postFood : Food -> Cmd Msg
 postFood food =
     Http.post
-        { url = firestoreUrl "documents/foods"
+        { url = "/api/food"
         , body = Http.jsonBody (encodeFood food)
-        , expect = Http.expectJson ReceiveFood documentDecoder
+        , expect = Http.expectJson PostFoodResponse foodDecoder
         }
 
 
-patchFood : Food -> Cmd Msg
-patchFood food =
+putFood : Food -> Cmd Msg
+putFood food =
     Http.request
-        { method = "Patch"
+        { method = "PUT"
         , headers = []
         , timeout = Nothing
         , tracker = Nothing
-        , url = "/api/v1/" ++ food.id ++ key
+        , url = "/api/food"
         , body = Http.jsonBody (encodeFood food)
-        , expect = Http.expectJson ReceiveFoodUpdate documentDecoder
+        , expect = Http.expectJson PutFoodResponse foodDecoder
         }
 
 
 deleteFood : String -> Cmd Msg
 deleteFood foodId =
     Http.request
-        { method = "Delete"
+        { method = "DELETE"
         , headers = []
         , timeout = Nothing
         , tracker = Nothing
-        , url = "/api/v1/" ++ foodId ++ key
+        , url = "/api/food/" ++ foodId
         , body = Http.emptyBody
-        , expect = Http.expectWhatever ReceiveFoodDelete
+        , expect = Http.expectWhatever DeleteFoodResponse
         }
 
 
-encodeFood : Food -> Encode.Value
+encodeFood : Food -> E.Value
 encodeFood food =
-    Encode.object
-        [ ( "fields"
-          , Encode.object
-                [ ( "title", Encode.object [ ( "stringValue", Encode.string food.title ) ] )
-                , ( "bought", Encode.object [ ( "booleanValue", Encode.bool food.bought ) ] )
-                , ( "order", Encode.object [ ( "integerValue", Encode.int food.order ) ] )
-                ]
-          )
+    E.object
+        [ ( "id", E.string food.id )
+        , ( "title", E.string food.title )
+        , ( "done", E.bool food.done )
+        , ( "date", E.int food.date )
         ]
 
 
-documentsDecoder : Decoder (Maybe (List FSDocument))
-documentsDecoder =
-    maybe (field "documents" (list documentDecoder))
-
-
-documentDecoder : Decoder FSDocument
-documentDecoder =
-    map2 FSDocument
-        (field "name" string)
-        (field "fields" fieldsDecoder)
-
-
-fieldsDecoder : Decoder FSDocumentFields
-fieldsDecoder =
-    map3 FSDocumentFields
-        (field "title" (field "stringValue" string))
-        (field "bought" (field "booleanValue" bool))
-        (field "order" (field "integerValue" string))
-
-
-fsDocumentToFood : FSDocument -> Food
-fsDocumentToFood doc =
-    { id = doc.name
-    , title = doc.fields.title
-    , bought = doc.fields.bought
-    , active = False
-    , changed = False
-    , order = Maybe.withDefault 0 (String.toInt doc.fields.order)
-    }
-
-
-fsDocumentsToFoods : List FSDocument -> List Food
-fsDocumentsToFoods =
-    List.map fsDocumentToFood
+foodDecoder : D.Decoder Food
+foodDecoder =
+    D.map4 (\id title done date -> Food id title done date False False)
+        (D.field "id" D.string)
+        (D.field "title" D.string)
+        (D.field "done" D.bool)
+        (D.field "date" D.int)
 
 
 find : Food -> List Food -> Maybe Food
 find food =
-    List.head << List.filter (\f -> f.id == food.id)
+    List.filter (\f -> f.id == food.id) >> List.head
 
 
 sortFoods : List Food -> List Food
 sortFoods =
-    List.reverse << List.sortBy .order
+    List.sortBy .date >> List.reverse
 
 
 replaceFood : Food -> List Food -> List Food
@@ -268,17 +211,17 @@ update msg model =
         ToggleFoodStatus food ->
             let
                 newFood =
-                    { food | bought = not food.bought }
+                    { food | done = not food.done }
             in
-            ( { model | groceries = replaceFood newFood model.groceries }, patchFood newFood )
+            ( { model | groceries = replaceFood newFood model.groceries }, putFood newFood )
 
-        ReceiveFoods result ->
-            case result of
+        GetFoodsResponse res ->
+            case res of
                 Ok groceries ->
                     case groceries of
                         Just items ->
                             ( { model
-                                | groceries = items |> fsDocumentsToFoods |> sortFoods
+                                | groceries = items |> sortFoods
                                 , initialLoad = Complete
                               }
                             , Cmd.none
@@ -290,13 +233,9 @@ update msg model =
                 Err err ->
                     ( { model | error = Just (extractTextFromError err), initialLoad = Complete }, Cmd.none )
 
-        ReceiveFood result ->
-            case result of
-                Ok foodDoc ->
-                    let
-                        food =
-                            fsDocumentToFood foodDoc
-                    in
+        PostFoodResponse res ->
+            case res of
+                Ok food ->
                     ( { model
                         | groceries = sortFoods (food :: model.groceries)
                         , newText = ""
@@ -313,27 +252,23 @@ update msg model =
                     , Cmd.none
                     )
 
-        ReceiveFoodDelete result ->
-            case result of
+        DeleteFoodResponse res ->
+            case res of
                 Ok _ ->
                     ( model, Cmd.none )
 
                 Err err ->
                     ( { model | error = Just (extractTextFromError err) }, getFoods )
 
-        ReceiveFoodUpdate result ->
+        PutFoodResponse result ->
             case result of
-                Ok foodDoc ->
-                    let
-                        newFood =
-                            fsDocumentToFood foodDoc
-                    in
-                    ( { model | groceries = replaceFood newFood model.groceries }, Cmd.none )
+                Ok food ->
+                    ( { model | groceries = replaceFood food model.groceries }, Cmd.none )
 
                 Err err ->
                     ( { model | error = Just (extractTextFromError err) }, Cmd.none )
 
-        RequestNewFood ->
+        PostFoodRequest ->
             if String.isEmpty model.newText then
                 ( model, Cmd.none )
 
@@ -342,26 +277,27 @@ update msg model =
                 , postFood
                     { id = ""
                     , title = model.newText
-                    , bought = False
+                    , done = False
                     , active = False
                     , changed = False
-                    , order = List.length model.groceries + 1
+                    , date = List.length model.groceries + 1
                     }
                 )
 
-        RequestPatchFood food ->
+        PutFoodRequest food ->
             if food.changed then
-                ( model, patchFood food )
+                ( model, putFood food )
 
             else
                 ( model, Cmd.none )
 
-        RequestDeleteFood foodId ->
-            let
-                newFoods =
+        DeleteFoodRequest foodId ->
+            ( { model
+                | groceries =
                     List.filter (\food -> not (food.id == foodId)) model.groceries
-            in
-            ( { model | groceries = newFoods }, deleteFood foodId )
+              }
+            , deleteFood foodId
+            )
 
 
 navbar : Model -> Html Msg
@@ -401,14 +337,14 @@ foodElem food =
             , onClick (ToggleFoodStatus food)
             , attribute "aria-label" "toggle"
             ]
-            [ case food.bought of
+            [ case food.done of
                 True ->
                     span [ css [ color (hex "00d1b2") ], class "icon" ] [ i [ class "fas fa-check fa-lg" ] [] ]
 
                 False ->
                     span [ class "icon" ] []
             ]
-        , case food.bought of
+        , case food.done of
             True ->
                 div
                     [ css
@@ -428,8 +364,8 @@ foodElem food =
                     , value food.title
                     , onFocus (FocusFood food)
                     , onInput (SetFoodText food)
-                    , onBlur (RequestPatchFood food)
-                    , Html.Styled.Attributes.disabled food.bought
+                    , onBlur (PutFoodRequest food)
+                    , Html.Styled.Attributes.disabled food.done
                     , attribute "aria-label" "Food"
                     , placeholder "Food..."
                     , id food.id
@@ -447,7 +383,7 @@ foodElem food =
         , button
             [ class "button"
             , attribute "aria-label" "delete"
-            , onClick (RequestDeleteFood food.id)
+            , onClick (DeleteFoodRequest food.id)
             , css [ borderRadius (pct 50), margin (px 5) ]
             ]
             [ span [ css [ color (hex "cccccc") ], class "icon" ] [ i [ class "fas fa-trash fa-lg" ] [] ]
@@ -478,7 +414,7 @@ addForm model =
             , backgroundColor (hex "fff")
             ]
         , class "field has-addons"
-        , onSubmit RequestNewFood
+        , onSubmit PostFoodRequest
         ]
         [ div [ class "control", css [ flex (num 1) ] ]
             [ input
@@ -486,12 +422,12 @@ addForm model =
                 , placeholder "New..."
                 , value model.newText
                 , onInput SetNewText
-                , class "input is-large"
+                , class "input is-large is-fullwidth"
                 , attribute "aria-label" "New"
+                , Html.Styled.Attributes.autofocus True
                 , Html.Styled.Attributes.disabled model.newItemLoading
                 , css
-                    [ Css.width (pct 100)
-                    , borderRadius (px 0)
+                    [ borderRadius (px 0)
                     ]
                 ]
                 []
@@ -520,7 +456,7 @@ view model =
 
                 Nothing ->
                     text ""
-            , div [ class "container" ]
+            , div [ class "container", css [ paddingBottom (px 54) ] ]
                 (case model.initialLoad of
                     Loading ->
                         []

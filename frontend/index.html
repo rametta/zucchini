@@ -5,9 +5,9 @@
   <title>Zucchini</title>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <meta name="description" content="An app for remembering what to buy. Built with Elm lang.">
+  <meta name="description" content="An app for remembering what to buy. Built with Elm lang and F#.">
   <meta name="author" content="Jason Rametta">
-  <meta name="keywords" content="Elm,Groceries,Zucchini">
+  <meta name="keywords" content="Elm,F#,Groceries,Zucchini">
   <meta http-equiv="X-UA-Compatible" content="ie=edge">
   <meta name="theme-color" content="#00d1b2">
   <link rel="manifest" href="manifest.webmanifest">
@@ -17,24 +17,12 @@
   <link rel="icon" type="image/png" sizes="16x16" href="public/favicon-16x16.png">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/bulma/0.7.5/css/bulma.css"
     integrity="sha256-ujE/ZUB6CMZmyJSgQjXGCF4sRRneOimQplBVLu8OU5w=" crossorigin="anonymous" />
-  <script defer src="https://use.fontawesome.com/releases/v5.3.1/js/all.js"></script>
+  <script async defer src="https://use.fontawesome.com/releases/v5.3.1/js/all.js"></script>
 </head>
 
 <body>
   <div id="app"></div>
   <script src="./index.js"></script>
-  <script>
-    if ('serviceWorker' in navigator) {
-      window.addEventListener('load', function () {
-        var swjs = '/service-worker.js'
-        navigator.serviceWorker.register(swjs).then(function (registration) {
-          console.log('ServiceWorker registration successful with scope: ', registration.scope);
-        }, function (err) {
-          console.log('ServiceWorker registration failed: ', err);
-        });
-      });
-    }
-  </script>
   <noscript>
     This app requires Javascript to be enabled.
   </noscript>

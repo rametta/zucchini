@@ -4,11 +4,8 @@ const server = new ParcelProxyServer({
   entryPoint: 'index.html',
   proxies: {
     '/api': {
-      target: 'https://firestore.googleapis.com',
-      changeOrigin: true,
-      pathRewrite: {
-        '^/api': '/',
-      }
+      target: 'https://zucchini-255619.appspot.com',
+      changeOrigin: true
     }
   }
 })
