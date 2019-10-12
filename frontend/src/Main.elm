@@ -449,30 +449,29 @@ view model =
     div
         []
         [ navbar model
-        , case model.error of
-            Just errortext ->
-                notify errortext True
-
-            Nothing ->
-                text ""
         , main_ [ css [ paddingBottom (px 54) ] ]
-            (case model.initialLoad of
+            [ case model.error of
+                Just errortext ->
+                    notify errortext True
+
+                Nothing ->
+                    text ""
+            , case model.initialLoad of
                 Loading ->
-                    [ Html.Styled.progress
+                    Html.Styled.progress
                         [ class "progress is-primary"
                         , Html.Styled.Attributes.max "100"
                         , css [ borderRadius (px 0) ]
                         ]
                         []
-                    ]
 
                 Complete ->
                     case List.isEmpty model.groceries of
                         False ->
-                            List.map foodElem model.groceries
+                            div [] (List.map foodElem model.groceries)
 
                         True ->
-                            [ notify "There are no items in your basket. Try adding some by tapping the \"Add\" button below." False ]
-            )
-        , addForm model
+                            notify "There are no items in your basket. Try adding some by tapping the \"Add\" button below." False
+            , addForm model
+            ]
         ]
