@@ -1,7 +1,10 @@
 import express, { Application } from 'express'
 import bodyParser from 'body-parser'
 import mongoose from 'mongoose'
+import dotenv from 'dotenv'
 import { Food } from './food'
+
+dotenv.config()
 
 const app: Application = express()
 
@@ -9,7 +12,7 @@ app.use(bodyParser.urlencoded({ extended: true }))
 app.use(bodyParser.json())
 
 app.get('/api/food', (req, res) => {
-  Food.find({ done: false }, (err, data) => {
+  Food.find({}, (err, data) => {
     if (err) {
       res.status(500).json(err)
       return
@@ -73,8 +76,8 @@ mongoose
     { useNewUrlParser: true }
   )
   .then(() =>
-    app.listen(8080, () =>
-      console.log('API listening on: http://localhost:8080')
+    app.listen(process.env.PORT || 8080, () =>
+      console.log('API listening')
     )
   )
   .catch(() => console.log('Could not connect to DB'))
