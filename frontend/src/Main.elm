@@ -106,7 +106,7 @@ deleteFood foodId =
 encodeFood : Food -> E.Value
 encodeFood food =
     E.object
-        [ ( "id", E.string food.id )
+        [ ( "_id", E.string food.id )
         , ( "title", E.string food.title )
         , ( "done", E.bool food.done )
         , ( "date", E.int food.date )
@@ -116,7 +116,7 @@ encodeFood food =
 foodDecoder : D.Decoder Food
 foodDecoder =
     D.map4 (\id title done date -> Food id title done date False False)
-        (D.field "id" D.string)
+        (D.field "_id" D.string)
         (D.field "title" D.string)
         (D.field "done" D.bool)
         (D.field "date" D.int)

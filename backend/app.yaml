@@ -1,2 +1,1 @@
-runtime: aspnetcore
-env: flex
+runtime: nodejs10
